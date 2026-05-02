@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OpenToken Console</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <h1>OpenToken</h1>
+    <nav>
+      <a class="active" href="#dashboard">Dashboard</a>
+      <a href="#api-keys">API Keys</a>
+      <a href="#models">Models</a>
+      <a href="#playground">Playground</a>
+      <a href="#usage">Usage</a>
+      <a href="#billing">Billing</a>
+      <a href="#logs">Logs</a>
+      <a href="#settings">Settings</a>
+      <a href="#docs">Docs</a>
+    </nav>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div><strong>Balance:</strong> $12.30</div>
+      <div><strong>Success Rate:</strong> 99.2%</div>
+      <button id="newKeyBtn">Create API Key</button>
+    </header>
+
+    <section id="dashboard" class="card">
+      <h2>👋 Welcome back</h2>
+      <p>让用户尽快完成第一条 API 请求。</p>
+      <div class="actions">
+        <button>Open Playground</button>
+        <button>View Docs</button>
+      </div>
+      <ol id="onboarding">
+        <li class="done">Create API Key</li>
+        <li>Send First Request</li>
+        <li>Integrate to App</li>
+      </ol>
+    </section>
+
+    <section id="api-keys" class="card">
+      <h2>API Keys</h2>
+      <div class="row">
+        <input id="keyName" placeholder="key name (dev/prod)" />
+        <select id="perm"><option>All</option><option>Limited</option></select>
+        <button id="createKey">Create</button>
+      </div>
+      <table>
+        <thead><tr><th>Name</th><th>Key</th><th>Status</th></tr></thead>
+        <tbody id="keyTable"><tr><td>default-key</td><td>sk-****</td><td>Active</td></tr></tbody>
+      </table>
+      <p id="keyNotice"></p>
+    </section>
+
+    <section id="models" class="card">
+      <h2>Recommended Models</h2>
+      <ul>
+        <li>⭐ deepseek-chat（通用）</li>
+        <li>⭐ qwen-plus（成本优先）</li>
+        <li>⭐ glm-4（推理优先）</li>
+      </ul>
+    </section>
+
+    <section id="playground" class="card playground">
+      <h2>Playground</h2>
+      <textarea id="prompt" placeholder="Write a summary..."></textarea>
+      <button id="sendPrompt">Send</button>
+      <pre id="responseBox">Response will appear here...</pre>
+    </section>
+
+    <section id="usage" class="card">
+      <h2>Usage Snapshot</h2>
+      <p>Total Requests: 12,320 | Tokens: 2.3M | Cost: $4.23</p>
+    </section>
+
+    <section id="billing" class="card">
+      <h2>Billing</h2>
+      <p>Current Balance: $12.30</p>
+      <div class="actions"><button>$10</button><button>$20</button><button>$50</button></div>
+    </section>
+
+    <section id="logs" class="card">
+      <h2>Logs</h2>
+      <p>10:21 deepseek-chat success 1200 tokens</p>
+      <p>10:22 qwen-plus failed (429)</p>
+    </section>
+
+    <section id="settings" class="card">
+      <h2>Settings</h2>
+      <p>Rate limit / IP whitelist / Key restrictions</p>
+    </section>
+
+    <section id="docs" class="card">
+      <h2>Quick Start</h2>
+      <pre>curl https://api.yoursite.com/v1/chat/completions \
+  -H "Authorization: Bearer sk-..."</pre>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
