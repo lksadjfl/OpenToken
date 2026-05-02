@@ -1,0 +1,7 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>OpenToken</title><link rel="stylesheet" href="/styles.css"></head>
+<body><aside class="sidebar"><h1>OpenToken</h1></aside><main>
+<header class="topbar"><div><b>Fullstack Demo</b></div><div id="health">Health: -</div></header>
+<section class="card"><h2>API Keys</h2><div class="row"><input id="keyName" placeholder="key name"><select id="perm"><option>All</option><option>Limited</option></select><button id="createKey">Create</button></div><table><thead><tr><th>Name</th><th>Mask</th><th>Perm</th><th>Created</th></tr></thead><tbody id="keyRows"></tbody></table></section>
+<section class="card"><h2>Playground</h2><div class="row"><input id="model" value="deepseek-chat"><input id="prompt" placeholder="输入 prompt"><button id="send">Send</button></div><pre id="resp"></pre></section>
+<section class="card"><h2>Logs</h2><button id="reload">Reload Logs</button><pre id="logs"></pre></section>
+</main><script src="/app.js"></script></body></html>
