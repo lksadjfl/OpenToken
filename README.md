@@ -17,6 +17,14 @@ Copy-Item .env.example .env
 
 ## Run
 
+Recommended:
+
+```powershell
+python -m backend.main
+```
+
+Equivalent uvicorn command:
+
 ```powershell
 python -m uvicorn backend.main:app --host 127.0.0.1 --port 18080 --reload
 ```
