@@ -31,6 +31,26 @@ function show(id, data) {
   if (el) el.textContent = JSON.stringify(data, null, 2);
 }
 
+function clear(el) {
+  while (el.firstChild) el.removeChild(el.firstChild);
+}
+
+function cell(text) {
+  const td = document.createElement("td");
+  td.textContent = text ?? "";
+  return td;
+}
+
+function labeledDiv(title, detail) {
+  const div = document.createElement("div");
+  const strong = document.createElement("strong");
+  const span = document.createElement("span");
+  strong.textContent = title;
+  span.textContent = detail;
+  div.append(strong, span);
+  return div;
+}
+
 function money(value, digits = 4) {
   return `$${Number(value || 0).toFixed(digits)}`;
 }
@@ -90,13 +110,13 @@ async function loadModels() {
   const result = await api("/api/models");
   const list = document.getElementById("modelList");
   if (!result.ok) {
-    list.innerHTML = "<div><strong>Error</strong><span>Could not load models</span></div>";
+    clear(list);
+    list.appendChild(labeledDiv("Error", "Could not load models"));
     return;
   }
-  list.innerHTML = "";
+  clear(list);
   result.data.forEach((model) => {
-    const row = document.createElement("div");
-    row.innerHTML = `<strong>${model.id}</strong><span>${model.status} | in ${model.input_price} / out ${model.output_price}</span>`;
+    const row = labeledDiv(model.id, `${model.status} | in ${model.input_price} / out ${model.output_price}`);
     row.onclick = () => {
       document.getElementById("model").value = model.id;
       document.getElementById("defaultModel").value = model.id;
@@ -110,35 +130,49 @@ async function loadKeys() {
   if (!token) return;
   const result = await api("/api/keys");
   const rows = document.getElementById("keyRows");
-  rows.innerHTML = "";
+  clear(rows);
   (result.data || []).forEach((key) => {
     const row = document.createElement("tr");
-    row.innerHTML = `<td>${key.name}</td><td><code>${key.key_mask}</code></td><td>${key.permissions}</td><td><span class="badge">${key.status}</span></td><td><button data-key-id="${key.id}">Revoke</button></td>`;
-    row.querySelector("button").onclick = async () => {
+    const maskCell = document.createElement("td");
+    const code = document.createElement("code");
+    code.textContent = key.key_mask;
+    maskCell.appendChild(code);
+    const statusCell = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = "badge";
+    badge.textContent = key.status;
+    statusCell.appendChild(badge);
+    const actionCell = document.createElement("td");
+    const revoke = document.createElement("button");
+    revoke.textContent = "Revoke";
+    revoke.dataset.keyId = key.id;
+    revoke.onclick = async () => {
       await api(`/api/keys/${key.id}`, {method: "DELETE"});
       await loadKeys();
     };
+    actionCell.appendChild(revoke);
+    row.append(cell(key.name), maskCell, cell(key.permissions), statusCell, actionCell);
     rows.appendChild(row);
   });
 }
 
 function renderLogRows(rows) {
   const body = document.getElementById("logRows");
-  body.innerHTML = "";
+  clear(body);
   (rows || []).forEach((log) => {
     const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${log.date || ""}</td>
-      <td>${log.model || ""}</td>
-      <td>${log.provider || ""}</td>
-      <td>${log.app || ""}</td>
-      <td>${log.input || 0}</td>
-      <td>${log.output || 0}</td>
-      <td>${money(log.cost, 6)}</td>
-      <td>${log.usage_type || ""}</td>
-      <td>${log.speed || 0}ms</td>
-      <td>${log.finish_reason || ""}</td>
-    `;
+    row.append(
+      cell(log.date || ""),
+      cell(log.model || ""),
+      cell(log.provider || ""),
+      cell(log.app || ""),
+      cell(log.input || 0),
+      cell(log.output || 0),
+      cell(money(log.cost, 6)),
+      cell(log.usage_type || ""),
+      cell(`${log.speed || 0}ms`),
+      cell(log.finish_reason || ""),
+    );
     body.appendChild(row);
   });
 }
@@ -165,19 +199,33 @@ async function loadUsage() {
 function renderBars(targetId, values) {
   const el = document.getElementById(targetId);
   const max = Math.max(...values.map((item) => item.value), 1);
-  el.innerHTML = values.map((item, index) => {
+  clear(el);
+  values.forEach((item, index) => {
     const height = Math.max(12, Math.round((item.value / max) * 168));
     const color = index % 2 === 0 ? "green" : "blue";
-    return `<span class="${color}" style="height:${height}px" title="${item.label}: ${item.value}"></span>`;
-  }).join("");
+    const bar = document.createElement("span");
+    bar.className = color;
+    bar.style.height = `${height}px`;
+    bar.title = `${item.label}: ${item.value}`;
+    el.appendChild(bar);
+  });
 }
 
 function renderLegend(targetId, rows, valueKey, formatter) {
   const el = document.getElementById(targetId);
-  el.innerHTML = rows.map((row, index) => {
+  clear(el);
+  rows.forEach((row, index) => {
     const color = index % 2 === 0 ? "green" : "blue";
-    return `<div><span class="legend-dot ${color}"></span><strong>${row.model}</strong><em>${formatter(row[valueKey] || 0)}</em></div>`;
-  }).join("");
+    const item = document.createElement("div");
+    const dot = document.createElement("span");
+    const name = document.createElement("strong");
+    const value = document.createElement("em");
+    dot.className = `legend-dot ${color}`;
+    name.textContent = row.model;
+    value.textContent = formatter(row[valueKey] || 0);
+    item.append(dot, name, value);
+    el.appendChild(item);
+  });
 }
 
 async function loadActivity() {
@@ -203,10 +251,10 @@ async function loadCredits() {
   document.getElementById("creditBalance").textContent = money(result.data.balance);
   show("creditsOutput", {balance: result.data.balance});
   const body = document.getElementById("creditRows");
-  body.innerHTML = "";
+  clear(body);
   result.data.transactions.forEach((tx) => {
     const row = document.createElement("tr");
-    row.innerHTML = `<td>${tx.created_at}</td><td>${money(tx.amount)}</td><td>${money(tx.balance_after)}</td><td>${tx.note}</td>`;
+    row.append(cell(tx.created_at), cell(money(tx.amount)), cell(money(tx.balance_after)), cell(tx.note));
     body.appendChild(row);
   });
 }

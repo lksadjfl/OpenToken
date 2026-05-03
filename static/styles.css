@@ -60,16 +60,16 @@ body.dark h2 {
   color: var(--text);
 }
 
-body.dark .nav-links a,
-body.dark .nav-footer a,
+body.dark .nav-links button,
+body.dark .nav-footer button,
 body.dark .brand span {
   color: #94a3b8;
 }
 
-body.dark .nav-links a:hover,
-body.dark .nav-footer a:hover,
-body.dark .nav-links a.active,
-body.dark .nav-footer a.active {
+body.dark .nav-links button:hover,
+body.dark .nav-footer button:hover,
+body.dark .nav-links button.active,
+body.dark .nav-footer button.active {
   color: #67e8f9;
   background: #1e293b;
   box-shadow: inset 0 0 0 1px #334155;
@@ -172,24 +172,28 @@ body.dark td {
   flex: 1;
 }
 
-.nav-links a,
-.nav-footer a {
+.nav-links button,
+.nav-footer button {
   display: flex;
   align-items: center;
   gap: 12px;
+  width: 100%;
   min-height: 38px;
   padding: 8px 12px;
   color: #64748b;
+  background: transparent;
+  border: 0;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
+  text-align: left;
   transition: background 150ms ease, color 150ms ease;
 }
 
-.nav-links a:hover,
-.nav-footer a:hover,
-.nav-links a.active {
+.nav-links button:hover,
+.nav-footer button:hover,
+.nav-links button.active {
   color: #0891b2;
   background: #ffffff;
   box-shadow: inset 0 0 0 1px #e2e8f0;
