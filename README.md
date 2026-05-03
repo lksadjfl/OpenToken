@@ -1,12 +1,40 @@
 # OpenToken
 
-可运行的全栈示例（前端 + 后端 + SQLite 数据库）。
+OpenToken is an MVP AI API gateway with a FastAPI backend, SQLite storage, API key management, usage logs, and a simple dashboard.
 
-## 启动
+## Setup
 
-```bash
-cd /workspace/OpenToken
-/usr/bin/python3 backend/app.py
+```powershell
+conda activate opentoken
+python -m pip install -r requirements.txt
 ```
 
-打开：http://127.0.0.1:8000
+## Run
+
+```powershell
+python -m uvicorn backend.main:app --reload
+```
+
+Open:
+
+```text
+http://127.0.0.1:8000
+```
+
+## Core APIs
+
+```text
+POST /auth/register
+POST /auth/login
+GET  /api/me
+GET  /api/keys
+POST /api/keys
+DELETE /api/keys/{id}
+POST /api/playground
+POST /v1/chat/completions
+GET  /api/logs
+GET  /api/usage
+GET  /health
+```
+
+`/v1/chat/completions` uses an OpenAI-compatible request shape and API key Bearer authentication.
