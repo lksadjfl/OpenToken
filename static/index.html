@@ -13,31 +13,27 @@
 <body>
   <aside class="side-nav">
     <div class="brand">
-      <div class="brand-mark">
-        <span class="material-symbols-outlined filled">token</span>
-      </div>
-      <div>
-        <strong>Console</strong>
-        <span>Developer v1.0</span>
-      </div>
+      <div class="brand-mark"><span class="material-symbols-outlined filled">token</span></div>
+      <div><strong>Console</strong><span>Developer v1.0</span></div>
     </div>
 
     <nav class="nav-links">
-      <a class="active" href="#dashboard"><span class="material-symbols-outlined filled">dashboard</span>Dashboard</a>
-      <a href="#keys"><span class="material-symbols-outlined">vpn_key</span>API Keys</a>
-      <a href="#models"><span class="material-symbols-outlined">model_training</span>Models</a>
-      <a href="#playground"><span class="material-symbols-outlined">terminal</span>Playground</a>
-      <a href="#usage"><span class="material-symbols-outlined">monitoring</span>Usage</a>
-      <a href="#logs"><span class="material-symbols-outlined">database</span>Logs</a>
-      <a href="#settings"><span class="material-symbols-outlined">settings</span>Settings</a>
+      <button class="active" data-route="dashboard"><span class="material-symbols-outlined filled">dashboard</span>Dashboard</button>
+      <button data-route="keys"><span class="material-symbols-outlined">vpn_key</span>API Keys</button>
+      <button data-route="models"><span class="material-symbols-outlined">model_training</span>Models</button>
+      <button data-route="playground"><span class="material-symbols-outlined">terminal</span>Playground</button>
+      <button data-route="usage"><span class="material-symbols-outlined">monitoring</span>Usage</button>
+      <button data-route="logs"><span class="material-symbols-outlined">database</span>Logs</button>
+      <button data-route="credits"><span class="material-symbols-outlined">account_balance_wallet</span>Credits</button>
+      <button data-route="settings"><span class="material-symbols-outlined">settings</span>Settings</button>
     </nav>
 
     <div class="nav-footer">
-      <a href="#docs"><span class="material-symbols-outlined">menu_book</span>Docs</a>
-      <div class="utility-row">
+      <button data-route="docs"><span class="material-symbols-outlined">menu_book</span>Docs</button>
+      <button id="themeToggle" class="utility-row" type="button">
         <span class="material-symbols-outlined">light_mode</span>
-        <span>English</span>
-      </div>
+        <span id="themeLabel">Light</span>
+      </button>
     </div>
   </aside>
 
@@ -45,157 +41,159 @@
     <header class="topbar">
       <div>
         <p class="section-kicker">OpenToken Gateway</p>
-        <h1>Developer Console</h1>
+        <h1 id="pageTitle">Developer Console</h1>
       </div>
       <div class="topbar-actions">
         <span id="health" class="status-dot">Health: -</span>
         <span id="account" class="account-chip">Not signed in</span>
+        <button id="logout" class="secondary-btn compact-btn">Logout</button>
       </div>
     </header>
 
-    <section id="dashboard" class="metrics-grid">
-      <article class="metric-card">
-        <span class="metric-label">Requests</span>
-        <strong id="metricRequests">0</strong>
-        <small>Total gateway calls</small>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">Tokens</span>
-        <strong id="metricTokens">0</strong>
-        <small>Prompt + completion</small>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">Cost</span>
-        <strong id="metricCost">$0.0000</strong>
-        <small>Virtual billing</small>
-      </article>
-      <article class="metric-card accent">
-        <span class="metric-label">Balance</span>
-        <strong id="metricBalance">$0.0000</strong>
-        <small>MVP test credit</small>
-      </article>
+    <section class="page active" data-page="dashboard">
+      <div class="metrics-grid">
+        <article class="metric-card"><span class="metric-label">Requests</span><strong id="metricRequests">0</strong><small>Total gateway calls</small></article>
+        <article class="metric-card"><span class="metric-label">Tokens</span><strong id="metricTokens">0</strong><small>Prompt + completion</small></article>
+        <article class="metric-card"><span class="metric-label">Cost</span><strong id="metricCost">$0.0000</strong><small>Virtual billing</small></article>
+        <article class="metric-card accent"><span class="metric-label">Balance</span><strong id="metricBalance">$0.0000</strong><small>MVP test credit</small></article>
+      </div>
+
+      <div class="content-grid">
+        <article class="panel account-panel">
+          <div class="panel-heading"><div><p class="section-kicker">Account</p><h2>Sign in</h2></div><span class="material-symbols-outlined">passkey</span></div>
+          <div class="form-stack">
+            <label>Email<input id="email" type="email" value="demo@example.com" placeholder="demo@example.com"></label>
+            <label>Password<input id="password" type="password" value="password123" placeholder="At least 6 characters"></label>
+            <div class="button-row">
+              <button id="register" class="primary-btn">Register</button>
+              <button id="login" class="secondary-btn">Login</button>
+            </div>
+          </div>
+          <pre id="authResult" class="compact-output"></pre>
+        </article>
+
+        <article class="panel">
+          <div class="panel-heading"><div><p class="section-kicker">Quick Actions</p><h2>Next step</h2></div><span class="badge">MVP</span></div>
+          <div class="action-grid">
+            <button class="secondary-btn" data-route="keys">Create API key</button>
+            <button class="secondary-btn" data-route="playground">Open playground</button>
+            <button class="secondary-btn" data-route="credits">Manage credits</button>
+            <button class="secondary-btn" data-route="usage">View usage</button>
+          </div>
+        </article>
+      </div>
     </section>
 
-    <section class="content-grid">
-      <article class="panel account-panel">
+    <section class="page" data-page="keys">
+      <article class="panel">
         <div class="panel-heading">
-          <div>
-            <p class="section-kicker">Account</p>
-            <h2>Sign in</h2>
-          </div>
-          <span class="material-symbols-outlined">passkey</span>
-        </div>
-        <div class="form-stack">
-          <label>Email<input id="email" type="email" value="demo@example.com" placeholder="demo@example.com"></label>
-          <label>Password<input id="password" type="password" value="password123" placeholder="At least 6 characters"></label>
-          <div class="button-row">
-            <button id="register" class="primary-btn">Register</button>
-            <button id="login" class="secondary-btn">Login</button>
+          <div><p class="section-kicker">API Keys</p><h2>Credentials</h2></div>
+          <div class="inline-form">
+            <input id="keyName" value="dev-key" placeholder="Key name">
+            <select id="perm"><option>All</option><option>Limited</option></select>
+            <button id="createKey" class="primary-btn">Create key</button>
           </div>
         </div>
-        <pre id="authResult" class="compact-output"></pre>
+        <p class="hint">New keys are shown once. Use the returned key as a Bearer token for /v1/chat/completions.</p>
+        <pre id="newKey" class="compact-output"></pre>
+        <div class="table-wrap"><table><thead><tr><th>Name</th><th>Mask</th><th>Permission</th><th>Status</th><th></th></tr></thead><tbody id="keyRows"></tbody></table></div>
       </article>
+    </section>
 
-      <article id="models" class="panel model-panel">
+    <section class="page" data-page="models">
+      <article class="panel">
+        <div class="panel-heading"><div><p class="section-kicker">Models</p><h2>Routing catalog</h2></div><span class="badge">Live API</span></div>
+        <div id="modelList" class="model-list"><div><strong>Loading</strong><span>Fetching model catalog</span></div></div>
+      </article>
+    </section>
+
+    <section class="page" data-page="playground">
+      <article class="panel playground-panel">
         <div class="panel-heading">
-          <div>
-            <p class="section-kicker">Models</p>
-            <h2>Routing catalog</h2>
-          </div>
-          <span class="badge">Mock adapters</span>
+          <div><p class="section-kicker">Playground</p><h2>Chat completions</h2></div>
+          <button id="send" class="primary-btn icon-btn"><span class="material-symbols-outlined">send</span>Send</button>
         </div>
-        <div class="model-list">
-          <div><strong>deepseek-chat</strong><span>Balanced general chat</span></div>
-          <div><strong>qwen-plus</strong><span>Chinese-friendly assistant</span></div>
-          <div><strong>glm-4</strong><span>Enterprise style reasoning</span></div>
+        <div class="playground-grid">
+          <div class="prompt-box">
+            <label>Model<select id="model"><option>deepseek-chat</option><option>qwen-plus</option><option>glm-4</option></select></label>
+            <label>Prompt<textarea id="prompt" rows="8">Hello OpenToken</textarea></label>
+          </div>
+          <div class="response-box"><div class="response-title"><span class="material-symbols-outlined">data_object</span>Response</div><pre id="resp"></pre></div>
         </div>
       </article>
     </section>
 
-    <section id="keys" class="panel">
-      <div class="panel-heading">
-        <div>
-          <p class="section-kicker">API Keys</p>
-          <h2>Credentials</h2>
-        </div>
-        <div class="inline-form">
-          <input id="keyName" value="dev-key" placeholder="Key name">
-          <select id="perm">
-            <option>All</option>
-            <option>Limited</option>
-          </select>
-          <button id="createKey" class="primary-btn">Create key</button>
+    <section class="page" data-page="usage">
+      <div class="activity-head">
+        <div><h2>Activity</h2><p>Your usage across models on OpenToken</p></div>
+        <div class="activity-actions">
+          <button id="usageRefresh" class="ghost-pill"><span class="material-symbols-outlined">refresh</span>Refresh</button>
+          <button id="viewLogsFromUsage" class="ghost-pill">View Logs</button>
         </div>
       </div>
-      <p class="hint">New keys are shown once. Use the returned key as a Bearer token for /v1/chat/completions.</p>
-      <pre id="newKey" class="compact-output"></pre>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Mask</th>
-              <th>Permission</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="keyRows"></tbody>
-        </table>
+      <div class="activity-grid">
+        <article class="activity-card"><span>Spend</span><strong id="chartSpend">$0.00</strong><div id="spendBars" class="bar-cluster"></div><div id="spendLegend" class="chart-legend"></div></article>
+        <article class="activity-card"><span>Requests</span><strong id="chartRequests">0</strong><div id="requestBars" class="bar-cluster"></div><div id="requestLegend" class="chart-legend"></div></article>
+        <article class="activity-card"><span>Tokens</span><strong id="chartTokens">0</strong><div id="tokenBars" class="bar-cluster"></div><div id="tokenLegend" class="chart-legend"></div></article>
       </div>
     </section>
 
-    <section id="playground" class="panel playground-panel">
-      <div class="panel-heading">
-        <div>
-          <p class="section-kicker">Playground</p>
-          <h2>Chat completions</h2>
+    <section class="page" data-page="logs">
+      <article class="log-panel">
+        <div class="log-tabs"><button class="active">Generations</button><button>Jobs</button><button>Sessions</button></div>
+        <div class="log-toolbar">
+          <div><button class="ghost-pill"><span class="material-symbols-outlined">filter_alt</span>Filters</button><button class="ghost-pill"><span class="material-symbols-outlined">flag</span>Feedback</button><button id="exportLogs" class="ghost-pill"><span class="material-symbols-outlined">download</span>Export</button></div>
+          <div><button id="reload" class="ghost-pill"><span class="material-symbols-outlined">refresh</span>Refresh</button><span class="timezone-chip">GMT+12</span></div>
         </div>
-        <button id="send" class="primary-btn icon-btn"><span class="material-symbols-outlined">send</span>Send</button>
-      </div>
-      <div class="playground-grid">
-        <div class="prompt-box">
-          <label>Model
-            <select id="model">
-              <option>deepseek-chat</option>
-              <option>qwen-plus</option>
-              <option>glm-4</option>
-            </select>
-          </label>
-          <label>Prompt
-            <textarea id="prompt" rows="8">Hello OpenToken</textarea>
-          </label>
+        <div class="table-wrap log-table-wrap">
+          <table class="log-table">
+            <thead><tr><th>Date</th><th>Model</th><th>Provider</th><th>App</th><th>Input</th><th>Output</th><th>Cost</th><th>Usage Type</th><th>Speed</th><th>Finish Reason</th></tr></thead>
+            <tbody id="logRows"></tbody>
+          </table>
         </div>
-        <div class="response-box">
-          <div class="response-title">
-            <span class="material-symbols-outlined">data_object</span>
-            Response
+      </article>
+    </section>
+
+    <section class="page" data-page="credits">
+      <div class="content-grid">
+        <article class="panel">
+          <div class="panel-heading"><div><p class="section-kicker">Credits</p><h2>Balance</h2></div><span class="badge">SQLite</span></div>
+          <div class="credit-balance" id="creditBalance">$0.0000</div>
+          <div class="inline-form credit-form">
+            <input id="topupAmount" type="number" min="1" step="1" value="10">
+            <input id="topupNote" value="manual top-up" placeholder="Note">
+            <button id="topupCredits" class="primary-btn">Add credits</button>
           </div>
-          <pre id="resp"></pre>
-        </div>
+          <pre id="creditsOutput" class="compact-output"></pre>
+        </article>
+        <article class="panel">
+          <div class="panel-heading"><div><p class="section-kicker">Credits</p><h2>Transactions</h2></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Date</th><th>Amount</th><th>Balance</th><th>Note</th></tr></thead><tbody id="creditRows"></tbody></table></div>
+        </article>
       </div>
     </section>
 
-    <section id="usage" class="panel">
-      <div class="panel-heading">
-        <div>
-          <p class="section-kicker">Usage</p>
-          <h2>Billing summary</h2>
+    <section class="page" data-page="settings">
+      <article class="panel">
+        <div class="panel-heading"><div><p class="section-kicker">Settings</p><h2>Gateway preferences</h2></div><button id="saveSettings" class="primary-btn icon-btn"><span class="material-symbols-outlined">save</span>Save</button></div>
+        <div class="settings-grid">
+          <label>Default model<select id="defaultModel"><option>deepseek-chat</option><option>qwen-plus</option><option>glm-4</option></select></label>
+          <label>Monthly budget<input id="monthlyBudget" type="number" min="0" step="0.01" value="10"></label>
+          <label>Rate limit / minute<input id="rateLimit" type="number" min="1" max="10000" value="60"></label>
+          <label>Language<select id="language"><option>English</option><option>简体中文</option></select></label>
         </div>
-        <button id="reload" class="secondary-btn icon-btn"><span class="material-symbols-outlined">refresh</span>Refresh</button>
-      </div>
-      <pre id="usageOutput" class="compact-output"></pre>
+        <pre id="settingsOutput" class="compact-output"></pre>
+      </article>
     </section>
 
-    <section id="logs" class="panel">
-      <div class="panel-heading">
-        <div>
-          <p class="section-kicker">Logs</p>
-          <h2>Request history</h2>
-        </div>
-        <span class="badge">Last 50</span>
-      </div>
-      <pre id="logsOutput" class="logs-output"></pre>
+    <section class="page" data-page="docs">
+      <article class="panel">
+        <div class="panel-heading"><div><p class="section-kicker">Docs</p><h2>API quick start</h2></div><button id="copyCurl" class="secondary-btn icon-btn"><span class="material-symbols-outlined">content_copy</span>Copy cURL</button></div>
+        <pre id="docsOutput" class="logs-output">curl http://127.0.0.1:18080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -d "{\"model\":\"deepseek-chat\",\"messages\":[{\"role\":\"user\",\"content\":\"Hello\"}]}"</pre>
+      </article>
     </section>
   </main>
 
