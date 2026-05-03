@@ -2,6 +2,7 @@ import hashlib
 import secrets
 import sqlite3
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,7 +25,13 @@ MODEL_PRICING = {
 }
 
 
-app = FastAPI(title="OpenToken API", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+
+app = FastAPI(title="OpenToken API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -48,6 +55,19 @@ class LoginIn(BaseModel):
 class ApiKeyIn(BaseModel):
     name: str = "default-key"
     permissions: str = "All"
+
+
+class SettingsIn(BaseModel):
+    default_model: str = "deepseek-chat"
+    monthly_budget: float = Field(default=10.0, ge=0)
+    rate_limit_per_minute: int = Field(default=60, ge=1, le=10000)
+    language: str = "English"
+    theme: str = "light"
+
+
+class CreditTopUpIn(BaseModel):
+    amount: float = Field(gt=0, le=10000)
+    note: str = "manual top-up"
 
 
 class ChatMessage(BaseModel):
@@ -92,6 +112,12 @@ def execute(query: str, args: tuple[Any, ...] = ()) -> int:
         cur = conn.execute(query, args)
         conn.commit()
         return int(cur.lastrowid)
+
+
+def ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def init_db() -> None:
@@ -147,18 +173,55 @@ def init_db() -> None:
                 tokens INTEGER NOT NULL,
                 cost REAL NOT NULL DEFAULT 0,
                 latency_ms INTEGER NOT NULL,
+                provider TEXT NOT NULL DEFAULT 'mock',
+                app TEXT NOT NULL DEFAULT 'Playground',
+                usage_type TEXT NOT NULL DEFAULT 'chat.completion',
+                finish_reason TEXT NOT NULL DEFAULT 'stop',
                 created_at TEXT NOT NULL,
                 FOREIGN KEY(user_id) REFERENCES users(id),
                 FOREIGN KEY(api_key_id) REFERENCES api_keys(id)
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS credit_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                amount REAL NOT NULL,
+                balance_after REAL NOT NULL,
+                note TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_settings (
+                user_id INTEGER PRIMARY KEY,
+                default_model TEXT NOT NULL,
+                monthly_budget REAL NOT NULL,
+                rate_limit_per_minute INTEGER NOT NULL,
+                language TEXT NOT NULL,
+                theme TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY(user_id) REFERENCES users(id)
+            )
+            """
+        )
+        ensure_column(conn, "api_keys", "user_id", "INTEGER")
+        ensure_column(conn, "api_keys", "key_hash", "TEXT")
+        ensure_column(conn, "logs", "user_id", "INTEGER")
+        ensure_column(conn, "logs", "api_key_id", "INTEGER")
+        ensure_column(conn, "logs", "input_tokens", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "logs", "output_tokens", "INTEGER NOT NULL DEFAULT 0")
+        ensure_column(conn, "logs", "cost", "REAL NOT NULL DEFAULT 0")
+        ensure_column(conn, "logs", "provider", "TEXT NOT NULL DEFAULT 'mock'")
+        ensure_column(conn, "logs", "app", "TEXT NOT NULL DEFAULT 'Playground'")
+        ensure_column(conn, "logs", "usage_type", "TEXT NOT NULL DEFAULT 'chat.completion'")
+        ensure_column(conn, "logs", "finish_reason", "TEXT NOT NULL DEFAULT 'stop'")
         conn.commit()
-
-
-@app.on_event("startup")
-def on_startup() -> None:
-    init_db()
 
 
 def current_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
@@ -176,6 +239,18 @@ def current_user(authorization: str | None = Header(default=None)) -> dict[str, 
     if not user:
         raise HTTPException(status_code=401, detail="invalid bearer token")
     return user
+
+
+def public_models() -> list[dict[str, Any]]:
+    return [
+        {
+            "id": model,
+            "input_price": pricing["input"],
+            "output_price": pricing["output"],
+            "status": "available",
+        }
+        for model, pricing in MODEL_PRICING.items()
+    ]
 
 
 def api_key_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:
@@ -205,6 +280,16 @@ def build_mock_response(model: str, prompt: str) -> str:
     return f"[Mock:{model}] Received your request: {prompt[:240]}"
 
 
+def provider_for_model(model: str) -> str:
+    if model.startswith("deepseek"):
+        return "DeepSeek"
+    if model.startswith("qwen"):
+        return "Qwen"
+    if model.startswith("glm"):
+        return "Zhipu"
+    return "Mock"
+
+
 def create_completion(payload: ChatCompletionIn, key_row: dict[str, Any] | None = None) -> dict[str, Any]:
     if payload.stream:
         raise HTTPException(status_code=400, detail="streaming is not implemented in MVP")
@@ -231,8 +316,9 @@ def create_completion(payload: ChatCompletionIn, key_row: dict[str, Any] | None 
     execute(
         """
         INSERT INTO logs(user_id, api_key_id, model, prompt, response, status,
-                         input_tokens, output_tokens, tokens, cost, latency_ms, created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+                         input_tokens, output_tokens, tokens, cost, latency_ms,
+                         provider, app, usage_type, finish_reason, created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             user_id,
@@ -246,6 +332,10 @@ def create_completion(payload: ChatCompletionIn, key_row: dict[str, Any] | None 
             total_tokens,
             cost,
             latency_ms,
+            provider_for_model(payload.model),
+            "Playground" if api_key_id is None else "API",
+            "chat.completion",
+            "stop",
             utc_now(),
         ),
     )
@@ -312,9 +402,21 @@ def login(payload: LoginIn) -> dict[str, Any]:
     return {"token": token, "user": {"id": user["id"], "email": user["email"], "balance": user["balance"]}}
 
 
+@app.post("/auth/logout")
+def logout(authorization: str | None = Header(default=None)) -> dict[str, bool]:
+    if authorization and authorization.startswith("Bearer "):
+        execute("DELETE FROM sessions WHERE token = ?", (authorization.removeprefix("Bearer ").strip(),))
+    return {"ok": True}
+
+
 @app.get("/api/me")
 def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     return {"id": user["id"], "email": user["email"], "balance": user["balance"]}
+
+
+@app.get("/api/models")
+def models() -> list[dict[str, Any]]:
+    return public_models()
 
 
 @app.get("/api/keys")
@@ -379,8 +481,9 @@ def chat_completions(payload: ChatCompletionIn, key_row: dict[str, Any] = Depend
 def logs(user: dict[str, Any] = Depends(current_user)) -> list[dict[str, Any]]:
     return fetch_all(
         """
-        SELECT id, model, prompt, response, status, input_tokens, output_tokens,
-               tokens, cost, latency_ms, created_at
+        SELECT id, created_at AS date, model, provider, app, input_tokens AS input,
+               output_tokens AS output, cost, usage_type, latency_ms AS speed,
+               finish_reason, prompt, response, status
         FROM logs
         WHERE user_id = ?
         ORDER BY id DESC
@@ -388,6 +491,34 @@ def logs(user: dict[str, Any] = Depends(current_user)) -> list[dict[str, Any]]:
         """,
         (user["id"],),
     )
+
+
+@app.get("/api/activity")
+def activity(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    rows = fetch_all(
+        """
+        SELECT model,
+               COUNT(*) AS requests,
+               COALESCE(SUM(tokens), 0) AS tokens,
+               COALESCE(SUM(cost), 0) AS spend
+        FROM logs
+        WHERE user_id = ?
+        GROUP BY model
+        ORDER BY spend DESC
+        """,
+        (user["id"],),
+    )
+    totals = fetch_one(
+        """
+        SELECT COUNT(*) AS requests,
+               COALESCE(SUM(tokens), 0) AS tokens,
+               COALESCE(SUM(cost), 0) AS spend
+        FROM logs
+        WHERE user_id = ?
+        """,
+        (user["id"],),
+    )
+    return {"totals": totals or {}, "by_model": rows}
 
 
 @app.get("/api/usage")
@@ -409,6 +540,90 @@ def usage(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
         **(row or {}),
         "balance": fresh_user["balance"] if fresh_user else 0,
     }
+
+
+@app.get("/api/credits")
+def credits(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    fresh_user = fetch_one("SELECT balance FROM users WHERE id = ?", (user["id"],))
+    transactions = fetch_all(
+        """
+        SELECT id, amount, balance_after, note, created_at
+        FROM credit_transactions
+        WHERE user_id = ?
+        ORDER BY id DESC
+        LIMIT 25
+        """,
+        (user["id"],),
+    )
+    return {"balance": fresh_user["balance"] if fresh_user else 0, "transactions": transactions}
+
+
+@app.post("/api/credits/top-up")
+def top_up_credits(payload: CreditTopUpIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    execute("UPDATE users SET balance = balance + ? WHERE id = ?", (payload.amount, user["id"]))
+    fresh_user = fetch_one("SELECT balance FROM users WHERE id = ?", (user["id"],))
+    balance = fresh_user["balance"] if fresh_user else 0
+    transaction_id = execute(
+        """
+        INSERT INTO credit_transactions(user_id, amount, balance_after, note, created_at)
+        VALUES(?,?,?,?,?)
+        """,
+        (user["id"], payload.amount, balance, payload.note.strip() or "manual top-up", utc_now()),
+    )
+    return {"id": transaction_id, "amount": payload.amount, "balance": balance}
+
+
+@app.get("/api/settings")
+def get_settings(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    settings = fetch_one("SELECT * FROM user_settings WHERE user_id = ?", (user["id"],))
+    if settings:
+        return {
+            "default_model": settings["default_model"],
+            "monthly_budget": settings["monthly_budget"],
+            "rate_limit_per_minute": settings["rate_limit_per_minute"],
+            "language": settings["language"],
+            "theme": settings["theme"],
+            "updated_at": settings["updated_at"],
+        }
+    return {
+        "default_model": "deepseek-chat",
+        "monthly_budget": 10.0,
+        "rate_limit_per_minute": 60,
+        "language": "English",
+        "theme": "light",
+        "updated_at": None,
+    }
+
+
+@app.put("/api/settings")
+def save_settings(payload: SettingsIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
+    if payload.default_model not in MODEL_PRICING:
+        raise HTTPException(status_code=400, detail="unsupported default model")
+    now = utc_now()
+    execute(
+        """
+        INSERT INTO user_settings(user_id, default_model, monthly_budget,
+                                  rate_limit_per_minute, language, theme, updated_at)
+        VALUES(?,?,?,?,?,?,?)
+        ON CONFLICT(user_id) DO UPDATE SET
+            default_model = excluded.default_model,
+            monthly_budget = excluded.monthly_budget,
+            rate_limit_per_minute = excluded.rate_limit_per_minute,
+            language = excluded.language,
+            theme = excluded.theme,
+            updated_at = excluded.updated_at
+        """,
+        (
+            user["id"],
+            payload.default_model,
+            payload.monthly_budget,
+            payload.rate_limit_per_minute,
+            payload.language,
+            payload.theme,
+            now,
+        ),
+    )
+    return {**payload.model_dump(), "updated_at": now}
 
 
 @app.get("/{asset_name}")
