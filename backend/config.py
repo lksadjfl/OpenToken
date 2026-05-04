@@ -4,7 +4,10 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = Path(os.getenv("OPENTOKEN_DB_PATH", BASE_DIR / "data.db"))
-STATIC_DIR = BASE_DIR / "static"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DB_PATH.as_posix()}")
+REDIS_URL = os.getenv("REDIS_URL", "memory://")
+STATIC_DIR = Path(os.getenv("STATIC_DIR", BASE_DIR / "frontend" / "dist"))
+LEGACY_STATIC_DIR = BASE_DIR / "static"
 
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "86400"))
 SESSION_REVOKE_OLD_ON_LOGIN = os.getenv("SESSION_REVOKE_OLD_ON_LOGIN", "false").lower() == "true"

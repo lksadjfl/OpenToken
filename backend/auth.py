@@ -1,8 +1,7 @@
-import sqlite3
-from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from .config import SESSION_REVOKE_OLD_ON_LOGIN
 from .db import execute, fetch_one, utc_now
@@ -33,7 +32,7 @@ def register(payload: RegisterIn) -> dict[str, Any]:
             "INSERT INTO users(email, password_hash, role, balance, created_at) VALUES(?,?,?,?,?)",
             (payload.email.lower(), hash_password(payload.password), "user", 10.0, now),
         )
-    except sqlite3.IntegrityError:
+    except IntegrityError:
         raise HTTPException(status_code=409, detail="email already registered") from None
     token = create_session(user_id)
     return {"token": token, "user": {"id": user_id, "email": payload.email.lower(), "role": "user", "balance": 10.0}}

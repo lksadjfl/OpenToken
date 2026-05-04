@@ -22,6 +22,11 @@ class AdminBootstrapIn(BaseModel):
 class ApiKeyIn(BaseModel):
     name: str = "default-key"
     permissions: str = "All"
+    group_id: int | None = None
+    quota: float = Field(default=0, ge=0)
+    expires_at: str | None = None
+    ip_whitelist: list[str] = Field(default_factory=list)
+    ip_blacklist: list[str] = Field(default_factory=list)
 
 
 class SettingsIn(BaseModel):
@@ -53,7 +58,7 @@ class ProviderResult(BaseModel):
     prompt_tokens: int
     completion_tokens: int
     finish_reason: str = "stop"
-    raw: dict[str, Any] = {}
+    raw: dict[str, Any] = Field(default_factory=dict)
 
 
 class ProviderIn(BaseModel):
@@ -96,3 +101,69 @@ class ModelRouteUpdateIn(BaseModel):
     priority: int | None = None
     fallback_enabled: bool | None = None
     status: str | None = None
+
+
+class AccountIn(BaseModel):
+    name: str
+    platform: str = "openai_compatible"
+    type: str = "api_key"
+    api_key: str = "mock"
+    base_url: str = "mock://local"
+    status: str = "active"
+    schedulable: bool = True
+    priority: int = 50
+    concurrency: int = Field(default=3, ge=1)
+    model_mapping: dict[str, str] = Field(default_factory=dict)
+
+
+class AccountUpdateIn(BaseModel):
+    name: str | None = None
+    platform: str | None = None
+    type: str | None = None
+    api_key: str | None = None
+    base_url: str | None = None
+    status: str | None = None
+    schedulable: bool | None = None
+    priority: int | None = None
+    concurrency: int | None = Field(default=None, ge=1)
+    model_mapping: dict[str, str] | None = None
+
+
+class AccountCredentialIn(BaseModel):
+    api_key: str
+
+
+class ChannelIn(BaseModel):
+    name: str
+    status: str = "active"
+    restrict_models: bool = False
+    model_mapping: dict[str, str] = Field(default_factory=dict)
+    model_pricing: list[dict[str, Any]] = Field(default_factory=list)
+    billing_model_source: str = "requested"
+
+
+class ChannelUpdateIn(BaseModel):
+    name: str | None = None
+    status: str | None = None
+    restrict_models: bool | None = None
+    model_mapping: dict[str, str] | None = None
+    model_pricing: list[dict[str, Any]] | None = None
+    billing_model_source: str | None = None
+
+
+class GroupIn(BaseModel):
+    name: str
+    status: str = "active"
+    rate_multiplier: float = Field(default=1.0, ge=0)
+    rpm_limit: int = Field(default=60, ge=0)
+    channel_ids: list[int] = Field(default_factory=list)
+    fallback_group_id: int | None = None
+
+
+class GroupUpdateIn(BaseModel):
+    name: str | None = None
+    status: str | None = None
+    rate_multiplier: float | None = Field(default=None, ge=0)
+    rpm_limit: int | None = Field(default=None, ge=0)
+    channel_ids: list[int] | None = None
+    fallback_group_id: int | None = None

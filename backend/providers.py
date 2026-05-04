@@ -6,7 +6,7 @@ import httpx
 from fastapi import HTTPException
 
 from .config import PROVIDER_RETRIES, PROVIDER_TIMEOUT_SECONDS
-from .db import fetch_one
+from .db import fetch_one, json_loads
 from .schemas import ChatCompletionIn, ProviderResult
 from .security import decrypt_secret
 
@@ -72,8 +72,9 @@ class OpenAICompatibleProvider:
         route: dict[str, Any],
         credential: dict[str, Any],
     ) -> ProviderResult:
-        provider_type = route["provider_type"]
-        api_key = decrypt_secret(credential["api_key_encrypted"])
+        provider_type = route.get("provider_type") or route.get("platform") or "openai_compatible"
+        encrypted = credential.get("api_key_encrypted") or credential.get("credentials_encrypted") or ""
+        api_key = decrypt_secret(encrypted)
         body = {
             "model": route["provider_model"],
             "messages": [message.model_dump() for message in payload.messages],
@@ -161,6 +162,25 @@ async def call_provider(payload: ChatCompletionIn, route: dict[str, Any]) -> tup
     if result.completion_tokens <= 0:
         result.completion_tokens = estimate_tokens(result.content)
     return result, latency_ms, credential
+
+
+async def call_account(payload: ChatCompletionIn, account: dict[str, Any], upstream_model: str) -> tuple[ProviderResult, int]:
+    route = {
+        "provider_type": account["platform"],
+        "platform": account["platform"],
+        "provider_model": upstream_model,
+        "base_url": account["base_url"],
+    }
+    credential = {"credentials_encrypted": account["credentials_encrypted"]}
+    started = time.perf_counter()
+    result = await client_for(account["platform"]).chat_completions(payload, route, credential)
+    latency_ms = int((time.perf_counter() - started) * 1000) + 1
+    prompt = prompt_from_payload(payload)
+    if result.prompt_tokens <= 0:
+        result.prompt_tokens = estimate_tokens(prompt)
+    if result.completion_tokens <= 0:
+        result.completion_tokens = estimate_tokens(result.content)
+    return result, latency_ms
 
 
 async def test_route(route: dict[str, Any]) -> dict[str, Any]:

@@ -36,13 +36,11 @@ def get_settings(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]
 def save_settings(payload: SettingsIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
     model = fetch_one(
         """
-        SELECT r.id
-        FROM model_routes r
-        JOIN providers p ON p.id = r.provider_id
-        WHERE r.public_model = ? AND r.status = 'active' AND p.status = 'active'
+        SELECT id
+        FROM channels
+        WHERE status = 'active'
         LIMIT 1
         """,
-        (payload.default_model,),
     )
     if not model:
         raise HTTPException(status_code=400, detail={"code": "unsupported_default_model", "message": "unsupported default model"})

@@ -141,61 +141,75 @@ def admin_headers(client: TestClient) -> dict[str, str]:
     return {"Authorization": f"Bearer {login.json()['token']}"}
 
 
-def user_api_key(client: TestClient, email: str = "route-user@example.com", permissions: str = "chat:completions") -> str:
+def user_api_key(client: TestClient, email: str = "route-user@example.com", permissions: str = "chat:completions", group_id: int | None = None) -> str:
     reg = client.post("/auth/register", json={"email": email, "password": "password123"})
     assert reg.status_code == 200
     headers = {"Authorization": f"Bearer {reg.json()['token']}"}
-    key = client.post("/api/keys", headers=headers, json={"name": "route-key", "permissions": permissions})
+    payload = {"name": "route-key", "permissions": permissions}
+    if group_id:
+        payload["group_id"] = group_id
+    key = client.post("/api/keys", headers=headers, json=payload)
     assert key.status_code == 200
     return key.json()["key"]
 
 
-def test_provider_admin_routes_and_mock_gateway():
+def test_account_channel_group_routes_and_mock_gateway():
     with TestClient(app) as client:
         user = client.post("/auth/register", json={"email": "plain-user@example.com", "password": "password123"})
         assert user.status_code == 200
-        assert client.get("/admin/providers", headers={"Authorization": f"Bearer {user.json()['token']}"}).status_code == 403
+        assert client.get("/admin/accounts", headers={"Authorization": f"Bearer {user.json()['token']}"}).status_code == 403
 
         headers = admin_headers(client)
-        provider = client.post(
-            "/admin/providers",
-            headers=headers,
-            json={"name": "CI Mock", "type": "mock", "base_url": "mock://ci", "status": "active"},
-        )
-        assert provider.status_code == 200
-        provider_id = provider.json()["id"]
-
-        credential = client.post(
-            f"/admin/providers/{provider_id}/credentials",
-            headers=headers,
-            json={"key_name": "primary", "api_key": "super-secret-provider-key", "status": "active"},
-        )
-        assert credential.status_code == 200
-        assert "super-secret-provider-key" not in credential.text
-        assert "api_key_encrypted" not in credential.text
-
-        route = client.post(
-            "/admin/model-routes",
+        account = client.post(
+            "/admin/accounts",
             headers=headers,
             json={
-                "public_model": "ci-mock",
-                "provider_id": provider_id,
-                "provider_model": "mock-provider-model",
-                "input_price": 0.000001,
-                "output_price": 0.000002,
+                "name": "CI Mock",
+                "platform": "mock",
+                "type": "mock",
+                "api_key": "super-secret-provider-key",
+                "base_url": "mock://ci",
                 "priority": 1,
-                "fallback_enabled": True,
-                "status": "active",
+                "model_mapping": {"ci-mock": "mock-provider-model"},
             },
         )
-        assert route.status_code == 200
-        route_id = route.json()["id"]
+        assert account.status_code == 200
+        account_id = account.json()["id"]
+        assert "super-secret-provider-key" not in account.text
+        assert "credentials_encrypted" not in account.text
 
-        test = client.post(f"/admin/model-routes/{route_id}/test", headers=headers)
+        credential = client.post(
+            f"/admin/accounts/{account_id}/credentials",
+            headers=headers,
+            json={"api_key": "rotated-secret-provider-key"},
+        )
+        assert credential.status_code == 200
+        assert "rotated-secret-provider-key" not in credential.text
+
+        channel = client.post(
+            "/admin/channels",
+            headers=headers,
+            json={
+                "name": "CI Channel",
+                "restrict_models": True,
+                "model_mapping": {"ci-mock": "ci-mock"},
+                "model_pricing": [{"models": ["ci-mock"], "input_price": 0.000001, "output_price": 0.000002}],
+            },
+        )
+        assert channel.status_code == 200
+        channel_id = channel.json()["id"]
+        group = client.post(
+            "/admin/groups",
+            headers=headers,
+            json={"name": "CI Group", "channel_ids": [channel_id], "rpm_limit": 60},
+        )
+        assert group.status_code == 200
+        group_id = group.json()["id"]
+
+        test = client.post(f"/admin/accounts/{account_id}/test", headers=headers)
         assert test.status_code == 200
-        assert test.json()["provider_model"] == "mock-provider-model"
 
-        key = user_api_key(client)
+        key = user_api_key(client, group_id=group_id)
         chat = client.post(
             "/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}"},
@@ -204,47 +218,40 @@ def test_provider_admin_routes_and_mock_gateway():
         assert chat.status_code == 200
         assert chat.json()["usage"]["provider"] == "CI Mock"
         assert chat.json()["usage"]["provider_model"] == "mock-provider-model"
-        assert chat.json()["usage"]["route_id"] == route_id
+        assert chat.json()["usage"]["account_id"] == account_id
+        assert chat.json()["usage"]["channel_id"] == channel_id
 
-        log = fetch_one("SELECT provider, provider_model, route_id, cost, latency_ms FROM logs WHERE model = ?", ("ci-mock",))
+        log = fetch_one("SELECT provider, upstream_model, account_id, channel_id, total_cost, duration_ms FROM usage_logs WHERE model = ?", ("ci-mock",))
         assert log["provider"] == "CI Mock"
-        assert log["provider_model"] == "mock-provider-model"
-        assert log["route_id"] == route_id
-        assert log["cost"] > 0
-        assert log["latency_ms"] > 0
+        assert log["upstream_model"] == "mock-provider-model"
+        assert log["account_id"] == account_id
+        assert log["channel_id"] == channel_id
+        assert log["total_cost"] > 0
+        assert log["duration_ms"] > 0
 
 
-def test_route_and_credential_availability_errors_and_fallback():
+def test_account_availability_errors_and_fallback():
     with TestClient(app) as client:
         headers = admin_headers(client)
-        disabled_provider = client.post(
-            "/admin/providers",
+        disabled_account = client.post(
+            "/admin/accounts",
             headers=headers,
-            json={"name": "Disabled Credential Provider", "type": "mock", "base_url": "mock://disabled", "status": "active"},
+            json={"name": "Disabled Account", "platform": "mock", "type": "mock", "api_key": "disabled-key", "base_url": "mock://disabled", "status": "disabled", "schedulable": False},
         ).json()
-        disabled_credential = client.post(
-            f"/admin/providers/{disabled_provider['id']}/credentials",
-            headers=headers,
-            json={"key_name": "disabled", "api_key": "disabled-key", "status": "disabled"},
-        )
-        assert disabled_credential.status_code == 200
-        unavailable_route = client.post(
-            "/admin/model-routes",
+        channel = client.post(
+            "/admin/channels",
             headers=headers,
             json={
-                "public_model": "credential-disabled-model",
-                "provider_id": disabled_provider["id"],
-                "provider_model": "credential-disabled",
-                "input_price": 0,
-                "output_price": 0,
-                "priority": 1,
-                "fallback_enabled": False,
-                "status": "active",
+                "name": "Disabled Only",
+                "restrict_models": True,
+                "model_mapping": {"credential-disabled-model": "credential-disabled"},
+                "model_pricing": [{"models": ["credential-disabled-model"], "input_price": 0, "output_price": 0}],
             },
         )
-        assert unavailable_route.status_code == 200
+        assert channel.status_code == 200
+        group = client.post("/admin/groups", headers=headers, json={"name": "Disabled Group", "channel_ids": [channel.json()["id"]]}).json()
 
-        key = user_api_key(client, "credential-user@example.com")
+        key = user_api_key(client, "credential-user@example.com", group_id=group["id"])
         unavailable = client.post(
             "/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}"},
@@ -253,63 +260,42 @@ def test_route_and_credential_availability_errors_and_fallback():
         assert unavailable.status_code == 503
         assert unavailable.json()["detail"]["code"] == "provider_unavailable"
 
-        disabled_route = client.put(
-            f"/admin/model-routes/{unavailable_route.json()['id']}",
+        disabled_channel = client.put(
+            f"/admin/channels/{channel.json()['id']}",
             headers=headers,
             json={"status": "disabled"},
         )
-        assert disabled_route.status_code == 200
+        assert disabled_channel.status_code == 200
         disabled = client.post(
             "/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}"},
             json={"model": "credential-disabled-model", "messages": [{"role": "user", "content": "hello"}]},
         )
-        assert disabled.status_code == 503
+        assert disabled.status_code == 404
         assert disabled.json()["detail"]["code"] == "model_unavailable"
 
-        fallback_provider = client.post(
-            "/admin/providers",
+        broken = client.post(
+            "/admin/accounts",
             headers=headers,
-            json={"name": "Fallback Mock", "type": "mock", "base_url": "mock://fallback", "status": "active"},
+            json={"name": "Broken First", "platform": "broken", "type": "api_key", "api_key": "bad", "base_url": "mock://broken", "priority": 1, "model_mapping": {"fallback-model": "broken-first"}},
+        )
+        assert broken.status_code == 200
+        fallback_account = client.post(
+            "/admin/accounts",
+            headers=headers,
+            json={"name": "Fallback Mock", "platform": "mock", "type": "mock", "api_key": "fallback-key", "base_url": "mock://fallback", "priority": 2, "model_mapping": {"fallback-model": "working-second"}},
+        )
+        assert fallback_account.status_code == 200
+        fallback_channel = client.post(
+            "/admin/channels",
+            headers=headers,
+            json={"name": "Fallback Channel", "restrict_models": True, "model_mapping": {"fallback-model": "fallback-model"}, "model_pricing": [{"models": ["fallback-model"], "input_price": 0.000001, "output_price": 0.000002}]},
         ).json()
-        client.post(
-            f"/admin/providers/{fallback_provider['id']}/credentials",
-            headers=headers,
-            json={"key_name": "active", "api_key": "fallback-key", "status": "active"},
-        )
-        first = client.post(
-            "/admin/model-routes",
-            headers=headers,
-            json={
-                "public_model": "fallback-model",
-                "provider_id": disabled_provider["id"],
-                "provider_model": "broken-first",
-                "input_price": 0,
-                "output_price": 0,
-                "priority": 1,
-                "fallback_enabled": True,
-                "status": "active",
-            },
-        )
-        assert first.status_code == 200
-        second = client.post(
-            "/admin/model-routes",
-            headers=headers,
-            json={
-                "public_model": "fallback-model",
-                "provider_id": fallback_provider["id"],
-                "provider_model": "working-second",
-                "input_price": 0.000001,
-                "output_price": 0.000002,
-                "priority": 2,
-                "fallback_enabled": True,
-                "status": "active",
-            },
-        )
-        assert second.status_code == 200
+        fallback_group = client.post("/admin/groups", headers=headers, json={"name": "Fallback Group", "channel_ids": [fallback_channel["id"]]}).json()
+        fallback_key = user_api_key(client, "fallback-user@example.com", group_id=fallback_group["id"])
         fallback = client.post(
             "/v1/chat/completions",
-            headers={"Authorization": f"Bearer {key}"},
+            headers={"Authorization": f"Bearer {fallback_key}"},
             json={"model": "fallback-model", "messages": [{"role": "user", "content": "hello"}]},
         )
         assert fallback.status_code == 200
@@ -360,10 +346,10 @@ def test_gateway_prechecks_for_permission_balance_and_budget():
         )
         execute(
             """
-            INSERT INTO logs(user_id, model, prompt, response, status, tokens, cost, latency_ms, provider, created_at)
-            VALUES(?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO logs(user_id, model, prompt, response, status, input_tokens, output_tokens, tokens, cost, latency_ms, provider, app, usage_type, finish_reason, created_at)
+            VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
             """,
-            (budget_id, "deepseek-chat", "x", "y", "success", 1, 1.0, 1, "mock", utc_now()),
+            (budget_id, "deepseek-chat", "x", "y", "success", 1, 1, 2, 1.0, 1, "mock", "API", "chat.completion", "stop", utc_now()),
         )
         budget_key = client.post(
             "/api/keys",

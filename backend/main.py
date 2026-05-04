@@ -7,13 +7,15 @@ from fastapi.staticfiles import StaticFiles
 import uvicorn
 
 from . import admin, auth, credits, gateway, keys, settings, usage
-from .config import ALLOWED_ORIGINS, STATIC_DIR
+from .cache import redis_client
+from .config import ALLOWED_ORIGINS, LEGACY_STATIC_DIR, STATIC_DIR
 from .db import init_db
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    redis_client().ping()
     yield
 
 
@@ -25,7 +27,16 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
-app.mount("/assets", StaticFiles(directory=STATIC_DIR), name="assets")
+
+
+def frontend_dir():
+    if (STATIC_DIR / "index.html").exists():
+        return STATIC_DIR
+    return LEGACY_STATIC_DIR
+
+
+if (frontend_dir() / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=frontend_dir() / "assets"), name="assets")
 
 app.include_router(auth.router)
 app.include_router(keys.router)
@@ -38,7 +49,7 @@ app.include_router(admin.router)
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(frontend_dir() / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/health")
@@ -48,9 +59,12 @@ def health() -> dict[str, bool]:
 
 @app.get("/{asset_name}")
 def static_asset(asset_name: str, request: Request) -> FileResponse:
-    if asset_name not in {"app.js", "styles.css"}:
+    if asset_name not in {"app.js", "styles.css", "favicon.ico"}:
+        return FileResponse(frontend_dir() / "index.html", headers={"Cache-Control": "no-store"})
+    path = frontend_dir() / asset_name
+    if not path.exists():
         raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(STATIC_DIR / asset_name, headers={"Cache-Control": "no-store"})
+    return FileResponse(path, headers={"Cache-Control": "no-store"})
 
 
 def main() -> None:
