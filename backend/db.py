@@ -48,6 +48,7 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 email TEXT NOT NULL UNIQUE,
                 password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'user',
                 balance REAL NOT NULL DEFAULT 10.0,
                 created_at TEXT NOT NULL
             )
@@ -135,6 +136,7 @@ def init_db() -> None:
         )
         ensure_column(conn, "sessions", "revoked_at", "TEXT")
         ensure_column(conn, "sessions", "expires_at", "TEXT NOT NULL DEFAULT '2099-01-01T00:00:00Z'")
+        ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
         ensure_column(conn, "api_keys", "user_id", "INTEGER")
         ensure_column(conn, "api_keys", "key_hash", "TEXT")
         ensure_column(conn, "logs", "user_id", "INTEGER")

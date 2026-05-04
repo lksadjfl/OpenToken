@@ -1,7 +1,10 @@
 .venv/
+venv/
 __pycache__/
 *.py[cod]
 data.db
+*.db
 .server.pid
-uvicorn.out.log
-uvicorn.err.log
+*.log
+.env
+.pytest_cache/
