@@ -22,14 +22,33 @@ def current_user(authorization: str | None = Header(default=None)) -> dict[str, 
         JOIN users ON users.id = sessions.user_id
         WHERE sessions.token = ?
         """,
-        (token,),
+        (hash_secret(token),),
     )
     if not user or user["revoked_at"]:
         raise HTTPException(status_code=401, detail="invalid bearer token")
     if user["expires_at"] <= utc_now():
-        execute("UPDATE sessions SET revoked_at = ? WHERE token = ?", (utc_now(), token))
+        execute("UPDATE sessions SET revoked_at = ? WHERE token = ?", (utc_now(), hash_secret(token)))
         raise HTTPException(status_code=401, detail="session expired")
     return user
+
+
+def current_admin(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    user = current_user(authorization)
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail={"code": "admin_required", "message": "admin access required"})
+    return user
+
+
+def has_permission(permission_value: str | None, required: str) -> bool:
+    if not permission_value:
+        return False
+    scopes = {scope.strip() for scope in permission_value.split(",") if scope.strip()}
+    return "*" in scopes or "All" in scopes or required in scopes
+
+
+def require_api_key_permission(key_row: dict[str, Any], required: str) -> None:
+    if not has_permission(key_row.get("permissions"), required):
+        raise HTTPException(status_code=403, detail={"code": "permission_denied", "message": f"missing permission: {required}"})
 
 
 def api_key_user(authorization: str | None = Header(default=None)) -> dict[str, Any]:

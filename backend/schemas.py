@@ -13,6 +13,12 @@ class LoginIn(BaseModel):
     password: str
 
 
+class AdminBootstrapIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=12)
+    setup_token: str
+
+
 class ApiKeyIn(BaseModel):
     name: str = "default-key"
     permissions: str = "All"

@@ -8,6 +8,7 @@ STATIC_DIR = BASE_DIR / "static"
 
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "86400"))
 SESSION_REVOKE_OLD_ON_LOGIN = os.getenv("SESSION_REVOKE_OLD_ON_LOGIN", "false").lower() == "true"
+ADMIN_SETUP_TOKEN = os.getenv("ADMIN_SETUP_TOKEN", "change-me")
 
 ALLOWED_ORIGINS = [
     origin.strip()

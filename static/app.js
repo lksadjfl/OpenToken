@@ -11,6 +11,7 @@ const titles = {
   logs: "Logs",
   credits: "Credits",
   settings: "Settings",
+  admin: "Admin",
   docs: "Docs",
 };
 
@@ -23,6 +24,9 @@ function headers() {
 async function api(url, options = {}) {
   const response = await fetch(url, {...options, headers: {...headers(), ...(options.headers || {})}});
   const data = await response.json().catch(() => ({}));
+  if (response.status === 401 && url !== "/auth/login" && url !== "/auth/register") {
+    clearSession("Session expired or invalid. Please login again.");
+  }
   return {ok: response.ok, status: response.status, data};
 }
 
@@ -56,7 +60,37 @@ function money(value, digits = 4) {
 }
 
 function setAccount(user) {
-  document.getElementById("account").textContent = user ? `${user.email} | ${money(user.balance)}` : "Not signed in";
+  if (!user) {
+    document.getElementById("account").textContent = "Not signed in";
+    return;
+  }
+  document.getElementById("account").textContent =
+    user.role === "admin" ? `${user.email} | admin` : `${user.email} | ${money(user.balance)}`;
+}
+
+function maskToken(value) {
+  if (!value) return "";
+  return value.length > 12 ? `${value.slice(0, 6)}...${value.slice(-4)}` : "***";
+}
+
+function clearSession(message) {
+  token = "";
+  localStorage.removeItem("opentoken.session");
+  setAccount(null);
+  setMetrics();
+  if (message) show("authResult", {error: message});
+}
+
+function acceptSession(data) {
+  const account = data.user || data.admin;
+  token = data.token;
+  localStorage.setItem("opentoken.session", token);
+  setAccount(account);
+  show("authResult", {
+    ok: true,
+    token_mask: maskToken(data.token),
+    account,
+  });
 }
 
 function setMetrics(data = {}) {
@@ -84,6 +118,7 @@ function routeTo(page) {
   if (target === "usage") loadActivity();
   if (target === "logs") loadLogs();
   if (target === "credits") loadCredits();
+  if (target === "admin") loadAdminOverview();
 }
 
 function requireLogin() {
@@ -103,7 +138,11 @@ async function loadHealth() {
 async function loadMe() {
   if (!token) return;
   const result = await api("/api/me");
-  if (result.ok) setAccount(result.data);
+  if (result.ok) {
+    setAccount(result.data);
+  } else if (result.status === 401) {
+    clearSession("Stored session is invalid. Please login again.");
+  }
 }
 
 async function loadModels() {
@@ -284,35 +323,42 @@ async function refresh() {
 }
 
 document.getElementById("register").onclick = async () => {
+  if (document.getElementById("loginMode").value === "admin") {
+    show("authResult", {error: "Admin accounts must be created with /admin/bootstrap."});
+    return;
+  }
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
   const result = await api("/auth/register", {method: "POST", body: JSON.stringify({email, password})});
-  show("authResult", result.data);
   if (result.ok) {
-    token = result.data.token;
-    localStorage.setItem("opentoken.session", token);
+    acceptSession(result.data);
     await refresh();
+  } else {
+    show("authResult", result.data);
   }
 };
 
 document.getElementById("login").onclick = async () => {
   const email = document.getElementById("email").value;
   const password = document.getElementById("password").value;
-  const result = await api("/auth/login", {method: "POST", body: JSON.stringify({email, password})});
-  show("authResult", result.data);
+  const mode = document.getElementById("loginMode").value;
+  const result = await api(mode === "admin" ? "/admin/login" : "/auth/login", {method: "POST", body: JSON.stringify({email, password})});
   if (result.ok) {
-    token = result.data.token;
-    localStorage.setItem("opentoken.session", token);
-    await refresh();
+    acceptSession(result.data);
+    if (mode === "admin") {
+      routeTo("admin");
+      await loadAdminOverview();
+    } else {
+      await refresh();
+    }
+  } else {
+    show("authResult", result.data);
   }
 };
 
 document.getElementById("logout").onclick = async () => {
   if (token) await api("/auth/logout", {method: "POST"});
-  token = "";
-  localStorage.removeItem("opentoken.session");
-  setAccount(null);
-  setMetrics();
+  clearSession();
   routeTo("dashboard");
 };
 
@@ -408,6 +454,17 @@ document.getElementById("exportLogs").onclick = () => {
   link.download = "opentoken-logs.json";
   link.click();
   URL.revokeObjectURL(url);
+};
+
+async function loadAdminOverview() {
+  if (!token) return;
+  const result = await api("/admin/overview");
+  show("adminOutput", result.data);
+}
+
+document.getElementById("loadAdmin").onclick = async () => {
+  if (!requireLogin()) return;
+  await loadAdminOverview();
 };
 
 document.querySelectorAll("[data-route]").forEach((button) => {

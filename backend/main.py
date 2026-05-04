@@ -4,8 +4,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+import uvicorn
 
-from . import auth, credits, gateway, keys, settings, usage
+from . import admin, auth, credits, gateway, keys, settings, usage
 from .config import ALLOWED_ORIGINS, STATIC_DIR
 from .db import init_db
 
@@ -32,11 +33,12 @@ app.include_router(gateway.router)
 app.include_router(usage.router)
 app.include_router(credits.router)
 app.include_router(settings.router)
+app.include_router(admin.router)
 
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(STATIC_DIR / "index.html")
+    return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/health")
@@ -48,4 +50,12 @@ def health() -> dict[str, bool]:
 def static_asset(asset_name: str, request: Request) -> FileResponse:
     if asset_name not in {"app.js", "styles.css"}:
         raise HTTPException(status_code=404, detail="not found")
-    return FileResponse(STATIC_DIR / asset_name)
+    return FileResponse(STATIC_DIR / asset_name, headers={"Cache-Control": "no-store"})
+
+
+def main() -> None:
+    uvicorn.run("backend.main:app", host="127.0.0.1", port=18080, reload=False)
+
+
+if __name__ == "__main__":
+    main()

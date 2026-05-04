@@ -4,12 +4,35 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from .config import MODEL_PRICING
 from .db import execute, fetch_one, utc_now
-from .dependencies import api_key_user, current_user, enforce_rate_limit
+from .dependencies import api_key_user, current_user, enforce_rate_limit, require_api_key_permission
 from .providers import call_provider
 from .schemas import ChatCompletionIn
 
 
 router = APIRouter()
+
+
+def current_month_spend(user_id: int) -> float:
+    row = fetch_one(
+        """
+        SELECT COALESCE(SUM(cost), 0) AS spend
+        FROM logs
+        WHERE user_id = ? AND substr(created_at, 1, 7) = substr(?, 1, 7)
+        """,
+        (user_id, utc_now()),
+    )
+    return float((row or {}).get("spend") or 0)
+
+
+def enforce_monthly_budget(user_id: int | None) -> None:
+    if not user_id:
+        return
+    settings = fetch_one("SELECT monthly_budget FROM user_settings WHERE user_id = ?", (user_id,))
+    if not settings:
+        return
+    monthly_budget = float(settings["monthly_budget"])
+    if monthly_budget > 0 and current_month_spend(user_id) >= monthly_budget:
+        raise HTTPException(status_code=402, detail={"code": "monthly_budget_exceeded", "message": "monthly budget exceeded"})
 
 
 async def create_completion(
@@ -27,8 +50,11 @@ async def create_completion(
 
     user_id = (key_row or user_row or {}).get("user_id") or (user_row or {}).get("id")
     api_key_id = (key_row or {}).get("id")
+    if key_row:
+        require_api_key_permission(key_row, "chat:completions")
     settings = fetch_one("SELECT rate_limit_per_minute FROM user_settings WHERE user_id = ?", (user_id,)) if user_id else None
     enforce_rate_limit(request, user_id, int((settings or {}).get("rate_limit_per_minute") or 60))
+    enforce_monthly_budget(user_id)
 
     prompt = "\n".join(f"{msg.role}: {msg.content}" for msg in payload.messages).strip()
     if not prompt:

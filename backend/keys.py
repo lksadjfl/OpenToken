@@ -11,6 +11,15 @@ from .security import hash_secret, mask_secret, new_token
 router = APIRouter()
 
 
+def normalize_permissions(value: str) -> str:
+    cleaned = (value or "").strip()
+    if cleaned in {"All", "*"}:
+        return "*"
+    if cleaned == "Limited":
+        return "chat:completions"
+    return cleaned or "chat:completions"
+
+
 @router.get("/api/keys")
 def list_keys(user: dict[str, Any] = Depends(current_user)) -> list[dict[str, Any]]:
     return fetch_all(
@@ -37,7 +46,7 @@ def create_key(payload: ApiKeyIn, user: dict[str, Any] = Depends(current_user)) 
             payload.name.strip() or "default-key",
             hash_secret(raw_key),
             mask_secret(raw_key),
-            payload.permissions,
+            normalize_permissions(payload.permissions),
             "Active",
             utc_now(),
         ),
@@ -47,7 +56,7 @@ def create_key(payload: ApiKeyIn, user: dict[str, Any] = Depends(current_user)) 
         "name": payload.name,
         "key": raw_key,
         "key_mask": mask_secret(raw_key),
-        "permissions": payload.permissions,
+        "permissions": normalize_permissions(payload.permissions),
         "status": "Active",
     }
 

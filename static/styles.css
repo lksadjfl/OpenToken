@@ -953,3 +953,149 @@ body.dark .nav-footer button.active {
     flex-direction: column;
   }
 }
+
+/* Theme-correct overrides for pages that were modeled from dark references. */
+[data-page="usage"] {
+  color: var(--text);
+  background: transparent;
+}
+
+.activity-head,
+.activity-head h2 {
+  color: var(--text);
+}
+
+.activity-head p {
+  color: var(--subtle);
+}
+
+.activity-card,
+.log-panel {
+  color: var(--text);
+  background: var(--surface);
+  border-color: #dbe4e7;
+}
+
+.activity-card > span,
+.timezone-chip {
+  color: var(--muted);
+}
+
+.chart-legend div,
+.log-tabs button.active {
+  color: var(--text);
+}
+
+.chart-legend em,
+.log-tabs button {
+  color: var(--subtle);
+}
+
+.ghost-pill {
+  color: var(--muted);
+  background: var(--surface);
+  border-color: var(--outline);
+}
+
+.ghost-pill:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+}
+
+.log-tabs {
+  border-bottom-color: #dbe4e7;
+}
+
+.log-tabs button.active {
+  border-bottom-color: var(--text);
+}
+
+.log-table-wrap {
+  border-top-color: #dbe4e7;
+}
+
+.log-table th {
+  color: var(--muted);
+  background: var(--surface-container);
+}
+
+.log-table td {
+  color: var(--text);
+  background: var(--surface);
+  border-color: #dbe4e7;
+}
+
+body.dark [data-page="usage"] {
+  color: #f8fafc;
+  background: #07080a;
+}
+
+body.dark .activity-head,
+body.dark .activity-head h2 {
+  color: #ffffff;
+}
+
+body.dark .activity-head p {
+  color: #b8c0cc;
+}
+
+body.dark .activity-card {
+  color: #f8fafc;
+  background: #07080a;
+  border-color: #333741;
+}
+
+body.dark .activity-card > span,
+body.dark .timezone-chip {
+  color: #cbd5e1;
+}
+
+body.dark .chart-legend div,
+body.dark .log-tabs button.active {
+  color: #ffffff;
+}
+
+body.dark .chart-legend em,
+body.dark .log-tabs button {
+  color: #9ca3af;
+}
+
+body.dark .ghost-pill {
+  color: #dbe4f0;
+  background: #07080a;
+  border-color: #333741;
+}
+
+body.dark .ghost-pill:hover {
+  color: #ffffff;
+  border-color: #5a6370;
+}
+
+body.dark .log-panel {
+  color: #f8fafc;
+  background: #08090b;
+  border-color: #20242b;
+}
+
+body.dark .log-tabs {
+  border-bottom-color: #2a2f37;
+}
+
+body.dark .log-tabs button.active {
+  border-bottom-color: #ffffff;
+}
+
+body.dark .log-table-wrap {
+  border-top-color: #2a2f37;
+}
+
+body.dark .log-table th {
+  color: #a7adba;
+  background: #292a2e;
+}
+
+body.dark .log-table td {
+  color: #dbe4f0;
+  background: #08090b;
+  border-color: #20242b;
+}

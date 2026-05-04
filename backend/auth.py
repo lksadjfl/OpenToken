@@ -4,11 +4,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from .config import SESSION_REVOKE_OLD_ON_LOGIN
+from .config import ADMIN_SETUP_TOKEN, SESSION_REVOKE_OLD_ON_LOGIN
 from .db import execute, fetch_one, utc_now
-from .dependencies import current_user
-from .schemas import LoginIn, RegisterIn
-from .security import hash_password, new_token, session_expiry, verify_password
+from .dependencies import current_admin, current_user
+from .schemas import AdminBootstrapIn, LoginIn, RegisterIn
+from .security import hash_password, hash_secret, new_token, session_expiry, verify_password
 
 
 router = APIRouter()
@@ -20,7 +20,7 @@ def create_session(user_id: int) -> str:
     token = new_token()
     execute(
         "INSERT INTO sessions(token, user_id, expires_at, created_at) VALUES(?,?,?,?)",
-        (token, user_id, session_expiry(), utc_now()),
+        (hash_secret(token), user_id, session_expiry(), utc_now()),
     )
     return token
 
@@ -30,13 +30,13 @@ def register(payload: RegisterIn) -> dict[str, Any]:
     now = utc_now()
     try:
         user_id = execute(
-            "INSERT INTO users(email, password_hash, balance, created_at) VALUES(?,?,?,?)",
-            (payload.email.lower(), hash_password(payload.password), 10.0, now),
+            "INSERT INTO users(email, password_hash, role, balance, created_at) VALUES(?,?,?,?,?)",
+            (payload.email.lower(), hash_password(payload.password), "user", 10.0, now),
         )
     except sqlite3.IntegrityError:
         raise HTTPException(status_code=409, detail="email already registered") from None
     token = create_session(user_id)
-    return {"token": token, "user": {"id": user_id, "email": payload.email.lower(), "balance": 10.0}}
+    return {"token": token, "user": {"id": user_id, "email": payload.email.lower(), "role": "user", "balance": 10.0}}
 
 
 @router.post("/auth/login")
@@ -45,13 +45,37 @@ def login(payload: LoginIn) -> dict[str, Any]:
     if not user or not verify_password(payload.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="invalid email or password")
     token = create_session(user["id"])
-    return {"token": token, "user": {"id": user["id"], "email": user["email"], "balance": user["balance"]}}
+    return {"token": token, "user": {"id": user["id"], "email": user["email"], "role": user["role"], "balance": user["balance"]}}
+
+
+@router.post("/admin/bootstrap")
+def bootstrap_admin(payload: AdminBootstrapIn) -> dict[str, Any]:
+    if payload.setup_token != ADMIN_SETUP_TOKEN:
+        raise HTTPException(status_code=403, detail={"code": "invalid_setup_token", "message": "invalid setup token"})
+    existing = fetch_one("SELECT * FROM users WHERE role = 'admin' LIMIT 1")
+    if existing:
+        raise HTTPException(status_code=409, detail={"code": "admin_exists", "message": "admin already exists"})
+    user_id = execute(
+        "INSERT INTO users(email, password_hash, role, balance, created_at) VALUES(?,?,?,?,?)",
+        (payload.email.lower(), hash_password(payload.password), "admin", 0.0, utc_now()),
+    )
+    token = create_session(user_id)
+    return {"token": token, "admin": {"id": user_id, "email": payload.email.lower(), "role": "admin"}}
+
+
+@router.post("/admin/login")
+def admin_login(payload: LoginIn) -> dict[str, Any]:
+    user = fetch_one("SELECT * FROM users WHERE email = ?", (payload.email.lower(),))
+    if not user or user["role"] != "admin" or not verify_password(payload.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="invalid admin credentials")
+    token = create_session(user["id"])
+    return {"token": token, "admin": {"id": user["id"], "email": user["email"], "role": "admin"}}
 
 
 @router.post("/auth/logout")
 def logout(authorization: str | None = Header(default=None)) -> dict[str, bool]:
     if authorization and authorization.startswith("Bearer "):
-        execute("UPDATE sessions SET revoked_at = ? WHERE token = ?", (utc_now(), authorization.removeprefix("Bearer ").strip()))
+        execute("UPDATE sessions SET revoked_at = ? WHERE token = ?", (utc_now(), hash_secret(authorization.removeprefix("Bearer ").strip())))
     return {"ok": True}
 
 
@@ -63,4 +87,9 @@ def logout_all(user: dict[str, Any] = Depends(current_user)) -> dict[str, bool]:
 
 @router.get("/api/me")
 def me(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    return {"id": user["id"], "email": user["email"], "balance": user["balance"]}
+    return {"id": user["id"], "email": user["email"], "role": user["role"], "balance": user["balance"]}
+
+
+@router.get("/admin/me")
+def admin_me(admin: dict[str, Any] = Depends(current_admin)) -> dict[str, Any]:
+    return {"id": admin["id"], "email": admin["email"], "role": admin["role"]}

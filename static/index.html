@@ -26,6 +26,7 @@
       <button data-route="logs"><span class="material-symbols-outlined">database</span>Logs</button>
       <button data-route="credits"><span class="material-symbols-outlined">account_balance_wallet</span>Credits</button>
       <button data-route="settings"><span class="material-symbols-outlined">settings</span>Settings</button>
+      <button data-route="admin"><span class="material-symbols-outlined">admin_panel_settings</span>Admin</button>
     </nav>
 
     <div class="nav-footer">
@@ -62,6 +63,7 @@
         <article class="panel account-panel">
           <div class="panel-heading"><div><p class="section-kicker">Account</p><h2>Sign in</h2></div><span class="material-symbols-outlined">passkey</span></div>
           <div class="form-stack">
+            <label>Mode<select id="loginMode"><option value="user">User</option><option value="admin">Admin</option></select></label>
             <label>Email<input id="email" type="email" value="demo@example.com" placeholder="demo@example.com"></label>
             <label>Password<input id="password" type="password" value="password123" placeholder="At least 6 characters"></label>
             <div class="button-row">
@@ -186,6 +188,17 @@
       </article>
     </section>
 
+    <section class="page" data-page="admin">
+      <article class="panel">
+        <div class="panel-heading">
+          <div><p class="section-kicker">Admin</p><h2>Operations overview</h2></div>
+          <button id="loadAdmin" class="primary-btn icon-btn"><span class="material-symbols-outlined">refresh</span>Load admin data</button>
+        </div>
+        <p class="hint">Use Admin mode in the sign-in card. Admin accounts are created through /admin/bootstrap.</p>
+        <pre id="adminOutput" class="compact-output"></pre>
+      </article>
+    </section>
+
     <section class="page" data-page="docs">
       <article class="panel">
         <div class="panel-heading"><div><p class="section-kicker">Docs</p><h2>API quick start</h2></div><button id="copyCurl" class="secondary-btn icon-btn"><span class="material-symbols-outlined">content_copy</span>Copy cURL</button></div>
@@ -197,6 +210,6 @@
     </section>
   </main>
 
-  <script src="/app.js"></script>
+  <script src="/app.js?v=20260504-auth-state"></script>
 </body>
 </html>
