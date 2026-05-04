@@ -2,7 +2,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from .config import MODEL_PRICING
 from .db import fetch_all, fetch_one
 from .dependencies import current_user
 
@@ -12,17 +11,28 @@ router = APIRouter()
 
 @router.get("/api/models")
 def models() -> list[dict[str, Any]]:
-    return [
-        {"id": model, "input_price": data["input"], "output_price": data["output"], "provider": data["provider"], "status": "available"}
-        for model, data in MODEL_PRICING.items()
-    ]
+    return fetch_all(
+        """
+        SELECT r.public_model AS id,
+               MIN(r.input_price) AS input_price,
+               MIN(r.output_price) AS output_price,
+               p.name AS provider,
+               r.provider_model,
+               'available' AS status
+        FROM model_routes r
+        JOIN providers p ON p.id = r.provider_id
+        WHERE r.status = 'active' AND p.status = 'active'
+        GROUP BY r.public_model
+        ORDER BY r.public_model
+        """
+    )
 
 
 @router.get("/api/logs")
 def logs(user: dict[str, Any] = Depends(current_user)) -> list[dict[str, Any]]:
     return fetch_all(
         """
-        SELECT id, created_at AS date, model, provider, app, input_tokens AS input,
+        SELECT id, created_at AS date, model, provider, provider_model, route_id, app, input_tokens AS input,
                output_tokens AS output, cost, usage_type, latency_ms AS speed,
                finish_reason, status
         FROM logs

@@ -54,3 +54,45 @@ class ProviderResult(BaseModel):
     completion_tokens: int
     finish_reason: str = "stop"
     raw: dict[str, Any] = {}
+
+
+class ProviderIn(BaseModel):
+    name: str
+    type: str = "openai_compatible"
+    base_url: str
+    status: str = "active"
+
+
+class ProviderUpdateIn(BaseModel):
+    name: str | None = None
+    type: str | None = None
+    base_url: str | None = None
+    status: str | None = None
+
+
+class ProviderCredentialIn(BaseModel):
+    key_name: str
+    api_key: str
+    status: str = "active"
+
+
+class ModelRouteIn(BaseModel):
+    public_model: str
+    provider_id: int
+    provider_model: str
+    input_price: float = Field(ge=0)
+    output_price: float = Field(ge=0)
+    priority: int = 100
+    fallback_enabled: bool = True
+    status: str = "active"
+
+
+class ModelRouteUpdateIn(BaseModel):
+    public_model: str | None = None
+    provider_id: int | None = None
+    provider_model: str | None = None
+    input_price: float | None = Field(default=None, ge=0)
+    output_price: float | None = Field(default=None, ge=0)
+    priority: int | None = None
+    fallback_enabled: bool | None = None
+    status: str | None = None

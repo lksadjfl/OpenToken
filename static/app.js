@@ -324,7 +324,7 @@ async function refresh() {
 
 document.getElementById("register").onclick = async () => {
   if (document.getElementById("loginMode").value === "admin") {
-    show("authResult", {error: "Admin accounts must be created with /admin/bootstrap."});
+    show("authResult", {error: "Admin accounts are seeded by backend configuration. Switch to Login."});
     return;
   }
   const email = document.getElementById("email").value;
@@ -458,13 +458,100 @@ document.getElementById("exportLogs").onclick = () => {
 
 async function loadAdminOverview() {
   if (!token) return;
-  const result = await api("/admin/overview");
-  show("adminOutput", result.data);
+  const [overview, providers, routes] = await Promise.all([
+    api("/admin/overview"),
+    api("/admin/providers"),
+    api("/admin/model-routes"),
+  ]);
+  show("adminOutput", {overview: overview.data, providers: providers.data, routes: routes.data});
+  renderProviders(providers.ok ? providers.data : []);
+  renderRoutes(routes.ok ? routes.data : []);
+}
+
+function renderProviders(rows) {
+  const body = document.getElementById("providerRows");
+  clear(body);
+  (rows || []).forEach((provider) => {
+    const row = document.createElement("tr");
+    const credentials = (provider.credentials || []).map((credential) => `${credential.key_name}:${credential.status}`).join(", ");
+    row.append(cell(provider.id), cell(provider.name), cell(provider.type), cell(provider.status), cell(credentials || "none"));
+    body.appendChild(row);
+  });
+}
+
+function renderRoutes(rows) {
+  const body = document.getElementById("routeRows");
+  clear(body);
+  (rows || []).forEach((route) => {
+    const row = document.createElement("tr");
+    const actions = document.createElement("td");
+    const testButton = document.createElement("button");
+    testButton.textContent = "Test";
+    testButton.onclick = async () => {
+      const result = await api(`/admin/model-routes/${route.id}/test`, {method: "POST"});
+      show("adminOutput", result.data);
+    };
+    actions.appendChild(testButton);
+    row.append(
+      cell(route.id),
+      cell(route.public_model),
+      cell(route.provider_name),
+      cell(route.provider_model),
+      cell(route.priority),
+      cell(route.status),
+      actions,
+    );
+    body.appendChild(row);
+  });
 }
 
 document.getElementById("loadAdmin").onclick = async () => {
   if (!requireLogin()) return;
   await loadAdminOverview();
+};
+
+document.getElementById("createProvider").onclick = async () => {
+  if (!requireLogin()) return;
+  const payload = {
+    name: document.getElementById("providerName").value,
+    type: document.getElementById("providerType").value,
+    base_url: document.getElementById("providerBaseUrl").value,
+    status: document.getElementById("providerStatus").value,
+  };
+  const result = await api("/admin/providers", {method: "POST", body: JSON.stringify(payload)});
+  show("adminOutput", result.data);
+  await loadAdminOverview();
+};
+
+document.getElementById("addCredential").onclick = async () => {
+  if (!requireLogin()) return;
+  const providerId = Number(document.getElementById("credentialProviderId").value || 0);
+  const payload = {
+    key_name: document.getElementById("credentialName").value,
+    api_key: document.getElementById("credentialApiKey").value,
+    status: document.getElementById("credentialStatus").value,
+  };
+  const result = await api(`/admin/providers/${providerId}/credentials`, {method: "POST", body: JSON.stringify(payload)});
+  show("adminOutput", result.data);
+  await loadAdminOverview();
+};
+
+document.getElementById("createRoute").onclick = async () => {
+  if (!requireLogin()) return;
+  const payload = {
+    public_model: document.getElementById("routePublicModel").value,
+    provider_id: Number(document.getElementById("routeProviderId").value || 0),
+    provider_model: document.getElementById("routeProviderModel").value,
+    input_price: Number(document.getElementById("routeInputPrice").value || 0),
+    output_price: Number(document.getElementById("routeOutputPrice").value || 0),
+    priority: Number(document.getElementById("routePriority").value || 100),
+    fallback_enabled: document.getElementById("routeFallback").value === "true",
+    status: document.getElementById("routeStatus").value,
+  };
+  const result = await api("/admin/model-routes", {method: "POST", body: JSON.stringify(payload)});
+  show("adminOutput", result.data);
+  await loadAdminOverview();
+  await loadModels();
 };
 
 document.querySelectorAll("[data-route]").forEach((button) => {

@@ -2,7 +2,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .config import MODEL_PRICING
 from .db import execute, fetch_one, utc_now
 from .dependencies import current_user
 from .schemas import SettingsIn
@@ -35,8 +34,18 @@ def get_settings(user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]
 
 @router.put("/api/settings")
 def save_settings(payload: SettingsIn, user: dict[str, Any] = Depends(current_user)) -> dict[str, Any]:
-    if payload.default_model not in MODEL_PRICING:
-        raise HTTPException(status_code=400, detail="unsupported default model")
+    model = fetch_one(
+        """
+        SELECT r.id
+        FROM model_routes r
+        JOIN providers p ON p.id = r.provider_id
+        WHERE r.public_model = ? AND r.status = 'active' AND p.status = 'active'
+        LIMIT 1
+        """,
+        (payload.default_model,),
+    )
+    if not model:
+        raise HTTPException(status_code=400, detail={"code": "unsupported_default_model", "message": "unsupported default model"})
     now = utc_now()
     execute(
         """

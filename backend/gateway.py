@@ -2,8 +2,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from .config import MODEL_PRICING
-from .db import execute, fetch_one, utc_now
+from .db import execute, fetch_all, fetch_one, utc_now
 from .dependencies import api_key_user, current_user, enforce_rate_limit, require_api_key_permission
 from .providers import call_provider
 from .schemas import ChatCompletionIn
@@ -35,6 +34,31 @@ def enforce_monthly_budget(user_id: int | None) -> None:
         raise HTTPException(status_code=402, detail={"code": "monthly_budget_exceeded", "message": "monthly budget exceeded"})
 
 
+def enforce_balance(user_id: int | None) -> None:
+    if not user_id:
+        return
+    row = fetch_one("SELECT balance FROM users WHERE id = ?", (user_id,))
+    if not row or float(row["balance"]) <= 0:
+        raise HTTPException(status_code=402, detail={"code": "insufficient_balance", "message": "insufficient balance"})
+
+
+def model_routes(public_model: str, include_disabled: bool = False) -> list[dict[str, Any]]:
+    status_clause = "" if include_disabled else "AND r.status = 'active' AND p.status = 'active'"
+    return fetch_all(
+        f"""
+        SELECT r.id, r.public_model, r.provider_id, r.provider_model,
+               r.input_price, r.output_price, r.priority, r.fallback_enabled,
+               r.status, p.name AS provider_name, p.type AS provider_type,
+               p.base_url, p.status AS provider_status
+        FROM model_routes r
+        JOIN providers p ON p.id = r.provider_id
+        WHERE r.public_model = ? {status_clause}
+        ORDER BY r.priority ASC, r.id ASC
+        """,
+        (public_model,),
+    )
+
+
 async def create_completion(
     payload: ChatCompletionIn,
     request: Request,
@@ -43,8 +67,6 @@ async def create_completion(
 ) -> dict[str, Any]:
     if payload.stream:
         raise HTTPException(status_code=400, detail={"code": "stream_not_implemented", "message": "streaming is not implemented"})
-    if payload.model not in MODEL_PRICING:
-        raise HTTPException(status_code=400, detail={"code": "unsupported_model", "message": "unsupported model"})
     if not payload.messages:
         raise HTTPException(status_code=400, detail={"code": "messages_required", "message": "messages are required"})
 
@@ -55,23 +77,47 @@ async def create_completion(
     settings = fetch_one("SELECT rate_limit_per_minute FROM user_settings WHERE user_id = ?", (user_id,)) if user_id else None
     enforce_rate_limit(request, user_id, int((settings or {}).get("rate_limit_per_minute") or 60))
     enforce_monthly_budget(user_id)
+    enforce_balance(user_id)
 
     prompt = "\n".join(f"{msg.role}: {msg.content}" for msg in payload.messages).strip()
     if not prompt:
         raise HTTPException(status_code=400, detail={"code": "message_content_required", "message": "message content is required"})
 
-    result, provider, latency_ms = await call_provider(payload)
+    routes = model_routes(payload.model)
+    if not routes:
+        has_disabled = model_routes(payload.model, include_disabled=True)
+        if has_disabled:
+            raise HTTPException(status_code=503, detail={"code": "model_unavailable", "message": "model route is disabled"})
+        raise HTTPException(status_code=404, detail={"code": "model_unavailable", "message": "model is not available"})
+
+    last_error: HTTPException | None = None
+    selected_route: dict[str, Any] | None = None
+    result = None
+    latency_ms = 0
+    for index, route in enumerate(routes):
+        try:
+            result, latency_ms, _credential = await call_provider(payload, route)
+            selected_route = route
+            break
+        except HTTPException as exc:
+            last_error = exc
+            can_fallback = bool(route.get("fallback_enabled")) and index < len(routes) - 1
+            if can_fallback:
+                continue
+            raise
+    if result is None or selected_route is None:
+        raise last_error or HTTPException(status_code=503, detail={"code": "provider_unavailable", "message": "provider unavailable"})
+
     input_tokens = result.prompt_tokens
     output_tokens = result.completion_tokens
     total_tokens = input_tokens + output_tokens
-    pricing = MODEL_PRICING[payload.model]
-    cost = input_tokens * pricing["input"] + output_tokens * pricing["output"]
+    cost = input_tokens * float(selected_route["input_price"]) + output_tokens * float(selected_route["output_price"])
     execute(
         """
         INSERT INTO logs(user_id, api_key_id, model, prompt, response, status,
                          input_tokens, output_tokens, tokens, cost, latency_ms,
-                         provider, app, usage_type, finish_reason, created_at)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+                         provider, provider_model, route_id, app, usage_type, finish_reason, created_at)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """,
         (
             user_id,
@@ -85,7 +131,9 @@ async def create_completion(
             total_tokens,
             cost,
             latency_ms,
-            provider,
+            selected_route["provider_name"],
+            selected_route["provider_model"],
+            selected_route["id"],
             "Playground" if api_key_id is None else "API",
             "chat.completion",
             result.finish_reason,
@@ -105,6 +153,9 @@ async def create_completion(
             "total_tokens": total_tokens,
             "cost": round(cost, 8),
             "latency_ms": latency_ms,
+            "provider": selected_route["provider_name"],
+            "provider_model": selected_route["provider_model"],
+            "route_id": selected_route["id"],
         },
     }
 

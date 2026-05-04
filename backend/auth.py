@@ -4,7 +4,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 
-from .config import ADMIN_SETUP_TOKEN, SESSION_REVOKE_OLD_ON_LOGIN
+from .config import SESSION_REVOKE_OLD_ON_LOGIN
 from .db import execute, fetch_one, utc_now
 from .dependencies import current_admin, current_user
 from .schemas import AdminBootstrapIn, LoginIn, RegisterIn
@@ -50,17 +50,10 @@ def login(payload: LoginIn) -> dict[str, Any]:
 
 @router.post("/admin/bootstrap")
 def bootstrap_admin(payload: AdminBootstrapIn) -> dict[str, Any]:
-    if payload.setup_token != ADMIN_SETUP_TOKEN:
-        raise HTTPException(status_code=403, detail={"code": "invalid_setup_token", "message": "invalid setup token"})
-    existing = fetch_one("SELECT * FROM users WHERE role = 'admin' LIMIT 1")
-    if existing:
-        raise HTTPException(status_code=409, detail={"code": "admin_exists", "message": "admin already exists"})
-    user_id = execute(
-        "INSERT INTO users(email, password_hash, role, balance, created_at) VALUES(?,?,?,?,?)",
-        (payload.email.lower(), hash_password(payload.password), "admin", 0.0, utc_now()),
+    raise HTTPException(
+        status_code=410,
+        detail={"code": "admin_bootstrap_disabled", "message": "admin accounts are seeded by backend configuration"},
     )
-    token = create_session(user_id)
-    return {"token": token, "admin": {"id": user_id, "email": payload.email.lower(), "role": "admin"}}
 
 
 @router.post("/admin/login")

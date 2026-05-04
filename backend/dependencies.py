@@ -66,7 +66,7 @@ def api_key_user(authorization: str | None = Header(default=None)) -> dict[str, 
     if not row:
         raise HTTPException(status_code=401, detail="invalid API key")
     if row.get("balance") is not None and float(row["balance"]) <= 0:
-        raise HTTPException(status_code=402, detail="insufficient balance")
+        raise HTTPException(status_code=402, detail={"code": "insufficient_balance", "message": "insufficient balance"})
     return row
 
 

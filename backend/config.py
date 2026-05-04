@@ -9,6 +9,11 @@ STATIC_DIR = BASE_DIR / "static"
 SESSION_TTL_SECONDS = int(os.getenv("SESSION_TTL_SECONDS", "86400"))
 SESSION_REVOKE_OLD_ON_LOGIN = os.getenv("SESSION_REVOKE_OLD_ON_LOGIN", "false").lower() == "true"
 ADMIN_SETUP_TOKEN = os.getenv("ADMIN_SETUP_TOKEN", "change-me")
+ENCRYPTION_KEY = os.getenv("ENCRYPTION_KEY", "dev-encryption-key-change-me")
+SEED_ADMIN_EMAIL = os.getenv("SEED_ADMIN_EMAIL", "admin@example.com").lower()
+SEED_ADMIN_PASSWORD = os.getenv("SEED_ADMIN_PASSWORD", "admin-password123")
+SEED_USER_EMAIL = os.getenv("SEED_USER_EMAIL", "user@example.com").lower()
+SEED_USER_PASSWORD = os.getenv("SEED_USER_PASSWORD", "password123")
 
 ALLOWED_ORIGINS = [
     origin.strip()
@@ -23,9 +28,3 @@ PROVIDER_RETRIES = int(os.getenv("PROVIDER_RETRIES", "1"))
 
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_BASE_URL = os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
-
-MODEL_PRICING = {
-    "deepseek-chat": {"input": 0.000001, "output": 0.000002, "provider": "deepseek"},
-    "qwen-plus": {"input": 0.0000015, "output": 0.000003, "provider": "mock"},
-    "glm-4": {"input": 0.000002, "output": 0.000004, "provider": "mock"},
-}
